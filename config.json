@@ -1,0 +1,14 @@
+{
+    "source": {
+        "label": "REPL-A",
+        "uuid":  "9fe369f1-0dfa-4010-8a9d-fc7fd70764ea",
+        "mount": "/mnt/repl-a/"
+    },
+    "replica": {
+        "label": "REPL-B",
+        "uuid":  "387b653e-2c56-4d1e-b05e-028cc706c334",
+        "mount": "/mnt/repl-b/"
+    },
+    "excludes": "/home/gnom/replicator/excludes.txt",
+    "trash":    ".trash"
+}
