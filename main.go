@@ -48,7 +48,7 @@ type Change struct {
 
 type Worker interface {
 	Diff(src string, dist string, exclds string) 	[]Change
-	Sync(src string, dist string)					bool
+	Sync(src string, dist string, exclds string)	[]Change
 }
 
 func CheckMount(mount, uuid string) error {
@@ -80,16 +80,23 @@ func (r Rsync) checkRsync() {
     }
 }
 
-func (r Rsync) Sync(src string, dst string) bool {
-
-	return true
+func (r Rsync) Sync(src string, dst string, exclds string) []Change {
+	return r.run(false, src, dst, exclds)
 }
 
 func (r Rsync) Diff(src string, dst string, exclds string) []Change {
+	return r.run(true, src, dst, exclds)
+}
+
+func (r Rsync) run(dryRun bool, src string, dst string, exclds string) []Change {
 	r.checkRsync()
 	result := []Change{}
 
-	cmd := exec.Command("rsync", "-rtni", "--delete", "--modify-window=2", "--exclude-from="+exclds, src, dst)
+	args := []string{"-rti", "--delete", "--modify-window=2", "--exclude-from=" + exclds}
+	if dryRun {
+		args = append(args, "-n")
+	}
+	cmd := exec.Command("rsync", append(args, src, dst)...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		fmt.Println("err rsync:", err)
@@ -138,19 +145,19 @@ func main() {
 	// danger window, must be process
 	var worker Worker = Rsync{}
 
+	var changes []Change
 	switch os.Args[1] {
 	case "status":
-		arr := worker.Diff(cfg.Source.Mount, cfg.Replica.Mount, cfg.Excludes)
-		for _, elem := range arr {
-			fmt.Println(elem)
-		}
+		changes = worker.Diff(cfg.Source.Mount, cfg.Replica.Mount, cfg.Excludes)
 	case "sync":
-		worker.Sync(cfg.Source.Mount, cfg.Replica.Mount)
-		fmt.Println("sync: not implemented yet")
+		changes = worker.Sync(cfg.Source.Mount, cfg.Replica.Mount, cfg.Excludes)
 	default:
 		fmt.Println("replct: unknown command: " + os.Args[1])
 		help()
 		os.Exit(2)
+	}
+	for _, elem := range changes {
+		fmt.Println(elem)
 	}
 }
 
