@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"strings"
 	"encoding/json"
+	"path/filepath"
 )
 
 type Disk struct {
@@ -15,10 +16,11 @@ type Disk struct {
 }
 
 type Config struct {
-    Source   Disk   `json:"source"`
-    Replica  Disk   `json:"replica"`
-    Excludes string `json:"excludes"`
-    Trash    string `json:"trash"`
+    Source   	Disk   `json:"source"`
+    Replica  	Disk   `json:"replica"`
+    Excludes 	string `json:"excludes"`
+    Trash    	string `json:"trash"`
+	Marker 		string `json:"marker"`
 }
 
 func loadConfig(path string) (Config, error) {
@@ -49,18 +51,24 @@ type Worker interface {
 	Sync(src string, dist string)					bool
 }
 
-func CheckMount(uuid, mount string) bool {
+func CheckMount(mount, uuid string) error {
     out, err := exec.Command("findmnt", "-no", "UUID", mount).Output()
     if err != nil {
-		fmt.Println("error: nothing mount in " + mount)
-		return false
+		return fmt.Errorf("error: nothing mount in %s", mount)
     }
     got := strings.TrimSpace(string(out))
     if got != uuid {
-        fmt.Println("different disc in " + mount + ". expect: " + uuid + ", got: " + got)
-		return false
+		return fmt.Errorf("different disc in %s. expect: %s, got: %s. err: %w", mount, uuid, got, err)
     }
-    return true
+    return err
+}
+
+func CheckMarker(mount, marker string) error {
+	_, err := os.ReadFile(filepath.Join(mount, marker))
+    if err != nil {
+        return fmt.Errorf("marker missing on %s: %w", mount, err)
+    }
+	return err
 }
 
 type Rsync struct { }
@@ -120,10 +128,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	if !CheckMount(cfg.Source.UUID, cfg.Source.Mount) || !CheckMount(cfg.Replica.UUID, cfg.Replica.Mount) {
+	if 	(CheckMount(cfg.Source.Mount, cfg.Source.UUID) != nil) ||
+		(CheckMount(cfg.Replica.Mount, cfg.Replica.UUID) != nil) ||
+		(CheckMarker(cfg.Source.Mount, cfg.Marker) != nil) ||
+		(CheckMarker(cfg.Replica.Mount, cfg.Marker) != nil) {
+		fmt.Println("gabella")
 		os.Exit(1)
 	}
-
+	// danger window, must be process
 	var worker Worker = Rsync{}
 
 	switch os.Args[1] {

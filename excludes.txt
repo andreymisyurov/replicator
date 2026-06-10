@@ -1,3 +1,4 @@
 /lost+found
 .DS_Store
 /.trash
+/.gabella

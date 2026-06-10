@@ -10,5 +10,6 @@
         "mount": "/mnt/repl-b/"
     },
     "excludes": "/home/gnom/replicator/excludes.txt",
-    "trash":    ".trash"
+    "trash":    ".trash",
+    "marker": ".gabella"
 }
