@@ -10,6 +10,11 @@ import (
 	"path/filepath"
 )
 
+
+
+
+
+
 type Disk struct {
     Label string `json:"label"`
     UUID  string `json:"uuid"`
@@ -22,6 +27,7 @@ type Config struct {
     Excludes 	string `json:"excludes"`
     Trash    	string `json:"trash"`
 	Marker 		string `json:"marker"`
+	MaxDelete 	int    `json:"maxDelete"`
 }
 
 func loadConfig(path string) (Config, error) {
@@ -42,6 +48,13 @@ const (
 	DELETE 	= "del"
 )
 
+
+
+
+
+
+
+
 type Change struct {
 	action string
 	path string
@@ -52,25 +65,32 @@ type Worker interface {
 	Sync(src string, dist string, exclds string)	[]Change
 }
 
-func CheckMount(mount, uuid string) error {
+func checkMount(mount, uuid string) error {
     out, err := exec.Command("findmnt", "-no", "UUID", mount).Output()
     if err != nil {
 		return fmt.Errorf("error: nothing mount in %s", mount)
     }
-    got := strings.TrimSpace(string(out))
-    if got != uuid {
-		return fmt.Errorf("different disc in %s. expect: %s, got: %s. err: %w", mount, uuid, got, err)
+	str := string(out[:len(out)-1])
+	str = str[strings.LastIndex(str, "\n")+1:]
+    if str != uuid {
+		return fmt.Errorf("different disc in %s. expect: %s, got: %s. err: %w", mount, uuid, str, err)
     }
     return err
 }
 
-func CheckMarker(mount, marker string) error {
+func checkMarker(mount, marker string) error {
 	_, err := os.ReadFile(filepath.Join(mount, marker))
     if err != nil {
         return fmt.Errorf("marker missing on %s: %w", mount, err)
     }
 	return err
 }
+
+
+
+
+
+
 
 type Rsync struct { }
 
@@ -125,6 +145,11 @@ func (r Rsync) run(dryRun bool, src string, dst string, exclds string) []Change 
 	return result
 }
 
+
+
+
+
+
 func main() {
 	if len(os.Args) != 2 {
 		help()
@@ -136,10 +161,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	if 	(CheckMount(cfg.Source.Mount, cfg.Source.UUID) != nil) ||
-		(CheckMount(cfg.Replica.Mount, cfg.Replica.UUID) != nil) ||
-		(CheckMarker(cfg.Source.Mount, cfg.Marker) != nil) ||
-		(CheckMarker(cfg.Replica.Mount, cfg.Marker) != nil) {
+	if 	(checkMount(cfg.Source.Mount, cfg.Source.UUID) != nil) ||
+		(checkMount(cfg.Replica.Mount, cfg.Replica.UUID) != nil) ||
+		(checkMarker(cfg.Source.Mount, cfg.Marker) != nil) ||
+		(checkMarker(cfg.Replica.Mount, cfg.Marker) != nil) {
 		fmt.Println("gabella")
 		os.Exit(1)
 	}

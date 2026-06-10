@@ -11,5 +11,6 @@
     },
     "excludes": "/home/gnom/replicator/excludes.txt",
     "trash":    ".trash",
-    "marker": ".gabella"
+    "marker": ".gabella",
+    "maxDelete": 50
 }
