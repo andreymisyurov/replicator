@@ -35,8 +35,8 @@ func loadConfig(path string) (Config, error) {
 
 const (
 	ADD 	= "add"
-	MODIFY 	= "modify"
-	DELETE 	= "delete"
+	MODIFY 	= "mod"
+	DELETE 	= "del"
 )
 
 type Change struct {
@@ -65,12 +65,20 @@ func CheckMount(uuid, mount string) bool {
 
 type Rsync struct { }
 
+func (r Rsync) checkRsync() {
+	if _, err := exec.LookPath("rsync"); err != nil {
+		fmt.Fprintln(os.Stderr, "rsync not found in PATH, install it (e.g. sudo apt install rsync)")
+		os.Exit(1)
+    }
+}
+
 func (r Rsync) Sync(src string, dst string) bool {
 
 	return true
 }
 
 func (r Rsync) Diff(src string, dst string, exclds string) []Change {
+	r.checkRsync()
 	result := []Change{}
 
 	cmd := exec.Command("rsync", "-rtni", "--delete", "--modify-window=2", "--exclude-from="+exclds, src, dst)
@@ -88,7 +96,7 @@ func (r Rsync) Diff(src string, dst string, exclds string) []Change {
 		prefix, path, ok := strings.Cut(line, " ")
 		if ok {
 			if prefix[0] == '*' {
-				result = append(result, Change{action:DELETE, path:path})
+				result = append(result, Change{action:DELETE, path:path[2:]})
 			} else if line[0] == '>' || line[0] == 'c' {
 				if len(prefix) >= 3 && prefix[2] == '+' {
 					result = append(result, Change{action:ADD, path:path})
@@ -114,6 +122,8 @@ func main() {
 
 	if !CheckMount(cfg.Source.UUID, cfg.Source.Mount) || !CheckMount(cfg.Replica.UUID, cfg.Replica.Mount) {
 		os.Exit(1)
+	}
+
 	var worker Worker = Rsync{}
 
 	switch os.Args[1] {
@@ -136,7 +146,7 @@ func help() {
 	fmt.Fprint(os.Stderr, `replct - one-way disk replicator
 
 Usage:
-  replct <command>
+  replicator <command>
 
 Commands:
   status   compare source and replica, report divergence (read-only)
