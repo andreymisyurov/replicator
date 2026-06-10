@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"syscall"
 	"strings"
 	"encoding/json"
 	"path/filepath"
@@ -151,6 +152,7 @@ func main() {
 		changes = worker.Diff(cfg.Source.Mount, cfg.Replica.Mount, cfg.Excludes)
 	case "sync":
 		changes = worker.Sync(cfg.Source.Mount, cfg.Replica.Mount, cfg.Excludes)
+		syscall.Sync()
 	default:
 		fmt.Println("replct: unknown command: " + os.Args[1])
 		help()
