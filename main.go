@@ -49,9 +49,10 @@ func loadConfig(path string) (Config, error) {
 	return cfg, nil
 }
 
+// main interface
 type Worker interface {
-	Diff(src string, dist string, exclds string) []Change
-	Sync(src string, dist string, exclds string) []Change
+	Diff(cfg Config) []Change
+	Sync(cfg Config) []Change
 }
 
 // security checks
@@ -63,9 +64,9 @@ func checkMount(mount, uuid string) error {
 	str := string(out[:len(out)-1])
 	str = str[strings.LastIndex(str, "\n")+1:]
 	if str != uuid {
-		return fmt.Errorf("different disc in %s. expect: %s, got: %s. err: %w", mount, uuid, str, err)
+		return fmt.Errorf("different disc in %s. expect: %s, got: %s", mount, uuid, str)
 	}
-	return err
+	return nil
 }
 
 func checkMarker(mount, marker string) error {
@@ -99,23 +100,23 @@ func (r Rsync) checkRsync() {
 	}
 }
 
-func (r Rsync) Sync(src string, dst string, exclds string) []Change {
-	return r.run(false, src, dst, exclds)
+func (r Rsync) Sync(cfg Config) []Change {
+	return r.run(false, cfg)
 }
 
-func (r Rsync) Diff(src string, dst string, exclds string) []Change {
-	return r.run(true, src, dst, exclds)
+func (r Rsync) Diff(cfg Config) []Change {
+	return r.run(true, cfg)
 }
 
-func (r Rsync) run(dryRun bool, src string, dst string, exclds string) []Change {
+func (r Rsync) run(dryRun bool, cfg Config) []Change {
 	r.checkRsync()
 	result := []Change{}
 
-	args := []string{"-rti", "--delete", "--modify-window=2", "--exclude-from=" + exclds}
+	args := []string{"-rti", "--delete", "--modify-window=2", "--exclude-from=" + cfg.Excludes, "--backup", "--backup-dir=" + cfg.Trash}
 	if dryRun {
 		args = append(args, "-n")
 	}
-	cmd := exec.Command("rsync", append(args, src, dst)...)
+	cmd := exec.Command("rsync", append(args, cfg.Source.Mount, cfg.Replica.Mount)...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		fmt.Println("err rsync:", err)
@@ -164,7 +165,11 @@ func main() {
 	// danger window, must be process
 	var worker Worker = Rsync{}
 
-	changes := worker.Diff(cfg.Source.Mount, cfg.Replica.Mount, cfg.Excludes)
+	changes := worker.Diff(cfg)
+	if len(changes) == 0 {
+		fmt.Println("nothing to sync")
+		os.Exit(0)
+	}
 	switch os.Args[1] {
 	case "status":
 		for _, elem := range changes {
@@ -175,7 +180,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		changes = worker.Sync(cfg.Source.Mount, cfg.Replica.Mount, cfg.Excludes)
+		changes = worker.Sync(cfg)
 		syscall.Sync()
 	default:
 		fmt.Println("replct: unknown command: " + os.Args[1])
