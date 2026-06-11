@@ -10,11 +10,22 @@ import (
 	"path/filepath"
 )
 
+const (
+	ADD 	= "add"
+	MODIFY 	= "mod"
+	DELETE 	= "del"
+)
+
+type Change struct {
+	action string
+	path string
+}
 
 
 
 
 
+// work with config
 type Disk struct {
     Label string `json:"label"`
     UUID  string `json:"uuid"`
@@ -42,11 +53,6 @@ func loadConfig(path string) (Config, error) {
 	return cfg, nil
 }
 
-const (
-	ADD 	= "add"
-	MODIFY 	= "mod"
-	DELETE 	= "del"
-)
 
 
 
@@ -55,16 +61,18 @@ const (
 
 
 
-type Change struct {
-	action string
-	path string
-}
 
 type Worker interface {
 	Diff(src string, dist string, exclds string) 	[]Change
 	Sync(src string, dist string, exclds string)	[]Change
 }
 
+
+
+
+
+
+// security checks
 func checkMount(mount, uuid string) error {
     out, err := exec.Command("findmnt", "-no", "UUID", mount).Output()
     if err != nil {
@@ -86,12 +94,24 @@ func checkMarker(mount, marker string) error {
 	return err
 }
 
+func checkDeleteLimit(arr []Change, limit int) error {
+	dels := 0
+	for _, c := range arr {
+		if c.action == DELETE {
+			dels++
+		}
+	}
+	if dels > limit {
+		return fmt.Errorf("refusing to sync: %d deletions planned, limit %d. please, do it manually with --force", dels, limit)
+	}
+	return nil
+}
 
 
 
 
 
-
+// rsync way
 type Rsync struct { }
 
 func (r Rsync) checkRsync() {
@@ -150,6 +170,8 @@ func (r Rsync) run(dryRun bool, src string, dst string, exclds string) []Change 
 
 
 
+
+
 func main() {
 	if len(os.Args) != 2 {
 		help()
@@ -171,20 +193,23 @@ func main() {
 	// danger window, must be process
 	var worker Worker = Rsync{}
 
-	var changes []Change
+	changes := worker.Diff(cfg.Source.Mount, cfg.Replica.Mount, cfg.Excludes)
 	switch os.Args[1] {
 	case "status":
-		changes = worker.Diff(cfg.Source.Mount, cfg.Replica.Mount, cfg.Excludes)
+		for _, elem := range changes {
+			fmt.Println(elem)
+		}
 	case "sync":
+		if err := checkDeleteLimit(changes, cfg.MaxDelete); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 		changes = worker.Sync(cfg.Source.Mount, cfg.Replica.Mount, cfg.Excludes)
 		syscall.Sync()
 	default:
 		fmt.Println("replct: unknown command: " + os.Args[1])
 		help()
 		os.Exit(2)
-	}
-	for _, elem := range changes {
-		fmt.Println(elem)
 	}
 }
 
