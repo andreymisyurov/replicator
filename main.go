@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -85,7 +86,7 @@ func checkDeleteLimit(arr []Change, limit int) error {
 		}
 	}
 	if dels > limit {
-		return fmt.Errorf("refusing to sync: %d deletions planned, limit %d. please, do it manually with --force", dels, limit)
+		return fmt.Errorf("refusing to sync: %d deletions planned, limit %d. please, do it manually with -f(--force) flag", dels, limit)
 	}
 	return nil
 }
@@ -145,10 +146,16 @@ func (r Rsync) run(dryRun bool, cfg Config) []Change {
 }
 
 func main() {
-	if len(os.Args) != 2 {
+	force := false
+	flag.BoolVar(&force, "force", false, "skip the deletion limit")
+	flag.BoolVar(&force, "f", false, "skip the deletion limit(shorthand)")
+	flag.Parse()
+	if flag.NArg() != 1 {
 		help()
 		os.Exit(2)
 	}
+
+
 	cfg, err := loadConfig("/home/gnom/replicator/config.json")
 	if err != nil {
 		fmt.Println("err loading config:", err)
@@ -170,15 +177,17 @@ func main() {
 		fmt.Println("nothing to sync")
 		os.Exit(0)
 	}
-	switch os.Args[1] {
+	switch flag.Arg(0) {
 	case "status":
 		for _, elem := range changes {
 			fmt.Println(elem)
 		}
 	case "sync":
-		if err := checkDeleteLimit(changes, cfg.MaxDelete); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+		if force == false {
+			if err := checkDeleteLimit(changes, cfg.MaxDelete); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
 		}
 		changes = worker.Sync(cfg)
 		syscall.Sync()
